@@ -74,6 +74,7 @@ function Create-Links {
         $createdLinks | Out-File -FilePath $logPath -Encoding utf8
         Write-Host ('Done: Created {0} links.' -f $count) -ForegroundColor Green
         Write-Host ('Log saved: {0}' -f $logFileName) -ForegroundColor Gray
+        Write-Host "  (NOTE: Do not delete this file. It is needed for 'Delete Links'.)" -ForegroundColor DarkYellow
     } else {
         Write-Host 'No target .exe files found.' -ForegroundColor Yellow
     }
@@ -130,4 +131,5 @@ do {
     
     Write-Host ''
     Read-Host "Press Enter to return to menu..."
+
 } until ($selection -in 'q', 'Q')
