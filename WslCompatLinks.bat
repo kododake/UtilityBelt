@@ -1,12 +1,24 @@
 <# : batch script section
 @echo off
-cd /d "%~dp0"
+
+REM --- Directory Selection ---
+if "%~1" neq "" (
+    if exist "%~1" (
+        cd /d "%~1"
+    ) else (
+        echo Error: Directory not found: "%~1"
+        pause
+        exit /b
+    )
+) else (
+    cd /d "%~dp0"
+)
 
 REM --- Admin Check & Elevation ---
 openfiles > nul
 if errorlevel 1 (
     echo Requesting admin privileges...
-    PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+    PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -ArgumentList '\"%cd%\"' -Verb RunAs"
     exit /b
 )
 
@@ -133,4 +145,3 @@ do {
     Read-Host "Press Enter to return to menu..."
 
 } until ($selection -in 'q', 'Q')
-
