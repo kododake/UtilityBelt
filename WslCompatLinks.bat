@@ -22,7 +22,7 @@ $logPrefix = 'symlink_created_list_'
 
 function Show-Menu {
     Clear-Host
-    Write-Host '=== Symbolic Link Manager (No Extension) ===' -ForegroundColor Cyan
+    Write-Host '=== Symbolic Link Manager (No Extension) by github.com/kododake ===' -ForegroundColor Cyan
     Write-Host "Work Dir: $baseDir" -ForegroundColor DarkGray
     Write-Host '-----------------------------------------------------'
     Write-Host '1. Create Links (Make symlinks for .exe)' -ForegroundColor Green
@@ -133,3 +133,4 @@ do {
     Read-Host "Press Enter to return to menu..."
 
 } until ($selection -in 'q', 'Q')
+
