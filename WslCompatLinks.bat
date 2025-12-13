@@ -1,36 +1,34 @@
 <# : batch script section
 @echo off
 
-REM --- Directory Selection ---
-if "%~1" neq "" (
-    if exist "%~1" (
-        cd /d "%~1"
-    ) else (
-        echo Error: Directory not found: "%~1"
-        pause
-        exit /b
-    )
-) else (
-    cd /d "%~dp0"
+REM --- Admin Re-launch Handling ---
+if not "%~1"=="" (
+    cd /d "%~1"
 )
 
 REM --- Admin Check & Elevation ---
 openfiles > nul
 if errorlevel 1 (
     echo Requesting admin privileges...
-    PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -ArgumentList '\"%cd%\"' -Verb RunAs"
+    powershell -Command "Start-Process cmd -ArgumentList '/c \"\"%~f0\" \"%cd%\"\"' -Verb RunAs"
     exit /b
 )
 
 REM --- Load PowerShell Script ---
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-Expression (Get-Content '%~f0' -Raw)"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-Expression (Get-Content -LiteralPath '%~f0' -Raw)"
+
+if %errorlevel% neq 0 (
+    echo.
+    echo [ERROR] PowerShell script exited abnormally.
+    pause
+)
 exit /b
 : end batch / begin powershell #>
 
 # --- PowerShell Logic ---
 
 $baseDir = Get-Location
-$logPrefix = 'symlink_created_list_'
+$logPrefix = 'Log_WslCompatLinks_created_list_'
 
 function Show-Menu {
     Clear-Host
@@ -45,7 +43,7 @@ function Show-Menu {
 }
 
 function Create-Links {
-    $recursiveInput = Read-Host 'Search subfolders? (y/n)'
+    $recursiveInput = Read-Host 'Search subfolders? (y/[N])'
     $isRecursive = ($recursiveInput -eq 'y')
     
     $timeStamp = Get-Date -Format 'yyyyMMdd-HHmmss'
@@ -87,13 +85,14 @@ function Create-Links {
         Write-Host ('Done: Created {0} links.' -f $count) -ForegroundColor Green
         Write-Host ('Log saved: {0}' -f $logFileName) -ForegroundColor Gray
         Write-Host "  (NOTE: Do not delete this file. It is needed for 'Delete Links'.)" -ForegroundColor DarkYellow
+        Write-Host "  (      Logs are searched recursively, so moving this file to a subfolder is OK.)" -ForegroundColor DarkYellow
     } else {
         Write-Host 'No target .exe files found.' -ForegroundColor Yellow
     }
 }
 
 function Delete-Links {
-    Write-Host 'Deleting links from logs...' -ForegroundColor Cyan
+    Write-Host 'Scanning logs for links to delete...' -ForegroundColor Cyan
     
     $logFiles = Get-ChildItem -Path $baseDir -Filter ($logPrefix + '*.txt') -Recurse
     
@@ -101,34 +100,58 @@ function Delete-Links {
         Write-Host 'No log files found.' -ForegroundColor Yellow
         return
     }
-    
+
+    $targets = @()
+
     foreach ($log in $logFiles) {
-        Write-Host ('Reading log: {0}' -f $log.Name) -ForegroundColor Magenta
-        if ((Get-Item $log.FullName).Length -eq 0) {
-            Write-Host "  -> Empty file, skipping." -ForegroundColor DarkGray
-            continue
-        }
-
+        if ((Get-Item $log.FullName).Length -eq 0) { continue }
         $paths = Get-Content -Path $log.FullName
-        
         foreach ($path in $paths) {
-            if ([string]::IsNullOrWhiteSpace($path)) { continue }
-
-            if (Test-Path $path) {
-                try {
-                    Remove-Item -Path $path -Force -ErrorAction Stop
-                    Write-Host ('Deleted: {0}' -f $path)
-                } catch {
-                    Write-Host ('Failed: {0} ({1})' -f $path, $_.Exception.Message) -ForegroundColor Red
-                }
-            } else {
-                Write-Host ('Not found: {0}' -f $path) -ForegroundColor DarkGray
+            if (-not [string]::IsNullOrWhiteSpace($path)) {
+                $targets += $path
             }
         }
-        
-        Remove-Item -Path $log.FullName
-        Write-Host ('Log deleted: {0}' -f $log.Name) -ForegroundColor Gray
-        Write-Host '-------------------'
+    }
+
+    if ($targets.Count -eq 0) {
+        Write-Host 'No deletion targets found in logs.' -ForegroundColor Yellow
+        return
+    }
+
+    Write-Host '--- Links to be deleted ---' -ForegroundColor Magenta
+    foreach ($t in $targets) {
+        if (Test-Path $t) {
+            Write-Host $t -ForegroundColor White
+        } else {
+            Write-Host "$t (Not Found)" -ForegroundColor DarkGray
+        }
+    }
+    Write-Host '---------------------------' -ForegroundColor Magenta
+
+    $confirm = Read-Host "Are you sure you want to delete these $($targets.Count) items? (y/[N])"
+    if ($confirm -ne 'y') {
+        Write-Host 'Operation cancelled.' -ForegroundColor Yellow
+        return
+    }
+    
+    foreach ($t in $targets) {
+        if (Test-Path $t) {
+            try {
+                Remove-Item -Path $t -Force -ErrorAction Stop
+                Write-Host ('Deleted: {0}' -f $t)
+            } catch {
+                Write-Host ('Failed: {0} ({1})' -f $t, $_.Exception.Message) -ForegroundColor Red
+            }
+        }
+    }
+    
+    foreach ($log in $logFiles) {
+        try {
+            Remove-Item -Path $log.FullName -Force
+            Write-Host ('Log deleted: {0}' -f $log.Name) -ForegroundColor Gray
+        } catch {
+            Write-Host ('Failed to delete log: {0}' -f $log.Name) -ForegroundColor Red
+        }
     }
     Write-Host 'All deletion tasks completed.' -ForegroundColor Green
 }
